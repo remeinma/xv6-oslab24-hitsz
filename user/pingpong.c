@@ -13,32 +13,37 @@ int main(int argc, char *argv[])
     int c2f[2];   //管道2：子进程->父进程
     pipe(f2c);
     pipe(c2f);
+    int _pid;
     int pid;
-    pid = fork();
-    if (pid == 0)
+    _pid = fork();
+    char send_buffer[4] = {0};
+    char rec_buffer[4] = {0};
+    if (_pid == 0)
     {
         /* child */
-        char buffer[32] = {0};
         close(f2c[1]);                               // 关闭f2c的写通道
         close(c2f[0]);                               // 关闭c2f的读通道
-        read(f2c[0], buffer, 4);                     // 读入ping
-        close(f2c[0]);                               // 已读出ping，可以关闭f2c的读通道
-        printf("%d: received %s from pid %d\n", getpid(), buffer, getpid()-1); 
-        write(c2f[1], "pong", 4);                    // 写入pong
+        pid = getpid();
+        read(f2c[0], rec_buffer, 4);                     // 读入
+        close(f2c[0]);                               // 已读出，可以关闭f2c的读通道
+        printf("%d: received ping from pid %s\n", pid, rec_buffer); 
+        itoa(pid, send_buffer);
+        write(c2f[1], send_buffer, 4);                    // 写入
         close(c2f[1]);                               // 关闭c2f的写通道
     }
-    else if (pid > 0)
+    else if (_pid > 0)
     {
         /* parent */
-        char buffer[32] = {0};
         close(f2c[0]);                               // 关闭f2c的读通道
         close(c2f[1]);                               // 关闭c2f的写通道
-        write(f2c[1], "ping", 4);                    // 写入ping
+        pid = getpid();
+        itoa(pid, send_buffer);
+        write(f2c[1], send_buffer, 4);                    // 写入
         close(f2c[1]);                               // 关闭f2c的写通道
-        wait(0);                                       // 等待子进程结束
-        read(c2f[0], buffer, 4);                     // 读入pong
+
+        read(c2f[0], rec_buffer, 4);                     // 读入pong
         close(c2f[0]);                               // 关闭c2f的读通道
-        printf("%d: received %s from pid %d\n", getpid(), buffer,getpid()+1); 
+        printf("%d: received pong from pid %s\n", pid, rec_buffer); 
     }
     else
     {
