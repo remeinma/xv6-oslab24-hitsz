@@ -397,58 +397,49 @@ void vmprint(pagetable_t pgtbl)
   vmprintpage(pgtbl, 1, idx);
 }
 
-void vmprintpage(pagetable_t pgtbl, int depth, uint64 idx)
+void vmprintpage(pagetable_t pgtbl, int depth, uint64 va)
 {
   // there are 2^9 = 512 PTEs in a page table.
   // 遍历一个页表页的PTE表项 
   for(int i = 0; i < 512; i++){
     pte_t pte = pgtbl[i]; //获取第i条PTE 
 
-    char rwxu[4] = "----";
+    char flags[4] = "----";
     if (pte & PTE_V) // 当前页表有效
     {
       printf("||");
 
       if (pte & PTE_R)
       {
-        rwxu[0]='r';
+        flags[0]='r';
       }
       if (pte & PTE_W)
       {
-        rwxu[1]='w';
+        flags[1]='w';
       }
       if (pte & PTE_X)
       {
-        rwxu[2]='x';
+        flags[2]='x';
       }
       if (pte & PTE_U)
       {
-        rwxu[3]='u';
+        flags[3]='u';
       }
 
       for (int j = 1; j < depth; j++)
       {
         printf("  ||");
       }
+      uint64 pa = PTE2PA(pte); // 将PTE转为为物理地址
 
       /* 判断PTE的Flag位，如果还有下一级页表(即当前是根页表或次页表)，
       则递归调用freewalk释放页表项，并将对应的PTE清零 */
       if((pte & (PTE_R|PTE_W|PTE_X)) == 0){ 
         // this PTE points to a lower-level page table.
-        idx = idx + i;
-        idx = idx << 9;
-        printf("idx: %d: pa: %p, flags: %s\n", i, PTE2PA(pte), rwxu);
-        uint64 child = PTE2PA(pte); // 将PTE转为为物理地址
-        vmprintpage((pagetable_t)child, depth+1, idx); // 递归调用vmprintpage
-        idx = idx >> 9;
-        idx = idx - i;
+        printf("idx: %d: pa: %p, flags: %s\n", i, PTE2PA(pte), flags);
+        vmprintpage((pagetable_t)pa, depth+1, (va + i) << 9); // 递归调用vmprintpage
       } else{ 
-
-        idx = idx + i;
-        idx = idx << 12;
-        printf("idx: %d: va: %p -> pa: %p, flags: %s\n", i, idx, PTE2PA(pte), rwxu);
-        idx = idx >> 12;
-        idx = idx - i;
+        printf("idx: %d: va: %p -> pa: %p, flags: %s\n", i, (va+i)<<12, PTE2PA(pte), flags);
       }
     }
   }
@@ -458,7 +449,7 @@ void kvmmap_n(pagetable_t k_pagetable, uint64 va, uint64 pa, uint64 sz, int perm
   if (mappages(k_pagetable, va, sz, pa, perm) != 0) panic("kvmmap_n");
 }
 
-pagetable_t vmcreate()
+pagetable_t kvmcreate()
 {
   pagetable_t k_pagetable = (pagetable_t)kalloc();
   memset(k_pagetable, 0, PGSIZE);

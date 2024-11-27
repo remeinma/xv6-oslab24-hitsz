@@ -113,7 +113,7 @@ found:
   }
 
   // 设置独立内核页表
-  p->k_pagetable = vmcreate();
+  p->k_pagetable = kvmcreate();
   if (p->k_pagetable == 0) {
     freeproc(p);
     release(&p->lock);
@@ -154,23 +154,22 @@ static void freeproc(struct proc *p) {
     pa[i] = 0;
   }
   // 释放该进程的独立内核页表
-  if (p->k_pagetable) kpagetable_free(p->k_pagetable);
+  if (p->k_pagetable) proc_freepagetable_n(p->k_pagetable);
   p->k_pagetable = 0;
   
 }
 
-void kpagetable_free(pagetable_t pagetable)
+void proc_freepagetable_n(pagetable_t pagetable)
 {
+  // there are 2^9 = 512 PTEs in a page table.
   for (int i = 0; i < 512; i++) {
       pte_t pte = pagetable[i];
       if ((pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) == 0) {
+        // this PTE points to a lower-level page table.
         uint64 child = PTE2PA(pte);
-        // 递归释放子页表及其对应页面
-        kpagetable_free((pagetable_t)child);
-        // 释放页表项的使用
+        proc_freepagetable_n((pagetable_t)child);
         pagetable[i] = 0;
       } else if (pte & PTE_V) {   
-        // 释放叶子页表
         pagetable[i] = 0;
       }
     }
